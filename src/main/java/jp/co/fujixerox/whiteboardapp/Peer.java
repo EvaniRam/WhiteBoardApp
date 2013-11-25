@@ -16,12 +16,15 @@ public class Peer {
     public int id;
     public String name;
     public Status status;
+    public String platform;
+    public boolean udp_enabled;
     
     
     
     public Peer()
     {
         this.id=-1;
+        udp_enabled=false;
         
     }
     

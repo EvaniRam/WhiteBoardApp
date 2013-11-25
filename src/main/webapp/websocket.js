@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-var wsUri = "ws://" + document.location.host + document.location.pathname + "whiteboardendpoint";
+var wsUri = "ws://127.0.0.1:8080/WhiteboardApp/whiteboardendpoint";
 var websocket = new WebSocket(wsUri);
 var output = document.getElementById("output");
 
