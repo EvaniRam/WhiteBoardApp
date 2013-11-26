@@ -6,10 +6,12 @@ package jp.co.fujixerox.whiteboardapp;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.PriorityQueue;
 import java.util.Set;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -35,6 +37,7 @@ public class MyWhiteboard {
     private static Set<Session> session_peers=Collections.synchronizedSet(new HashSet<Session>());
     private HashMap<Session,Peer> map_peers=new HashMap<Session,Peer>();
     private static int peer_id=0;
+    private PriorityQueue<Integer> reclaimed_peer_id_queue=new PriorityQueue<Integer>();
 
     @OnMessage
     public String onMessage(Session session,String message) {
@@ -43,6 +46,12 @@ public class MyWhiteboard {
         System.out.println("got message from client: "+message);
        
         Peer peer=map_peers.get(session);
+        
+        if(peer==null)
+        {
+            System.out.println("cannot find peer in the session list, message ignored!");
+            return null;
+        }
         
         ProcessMessage(peer,message,session);
         
@@ -162,6 +171,8 @@ public class MyWhiteboard {
         {
             e.printStackTrace();
         }
+        
+        System.out.println("message is sent: "+msg);
     }
     
     
@@ -172,8 +183,20 @@ public class MyWhiteboard {
         
         System.out.println("received peer login request");
         
-        peer_id++;
-        peer.id=peer_id;
+        
+        int candiate_id;
+        if(!this.reclaimed_peer_id_queue.isEmpty())
+        {
+            candiate_id=this.reclaimed_peer_id_queue.poll();
+        }
+        else
+        {
+            peer_id++;
+            candiate_id=peer_id;
+        }
+        
+        
+        peer.id=candiate_id;
         peer.status=Peer.Status.STATUS_IDLE;
         
         String name=json.getString("name");
@@ -195,6 +218,10 @@ public class MyWhiteboard {
         
         
         SendMessage(obj.toString(),session);
+        
+        
+        SendOnlinePeers(session);
+        
         
         //send the broadcast message to other peers
         String status=peer.status==Peer.Status.STATUS_IDLE?"idle":"busy";
@@ -235,11 +262,15 @@ public class MyWhiteboard {
         
         BroadcastMessage(oobj.toString(),session);
         
+        
+        //put the id into the reclaimed peer id queue
+        this.reclaimed_peer_id_queue.add(peer.id);
+        
         peer.id=-1;
         peer.name=null;
         peer.status=Peer.Status.STATUS_IDLE;
         
-        map_peers.remove(session);
+       // map_peers.remove(session);
         
     }
     
@@ -284,6 +315,38 @@ public class MyWhiteboard {
                 .add("status",json.getString("status")).build();
         
         BroadcastMessage(oobj.toString(),session);
+    }
+    
+    public void SendOnlinePeers(Session session)
+    {
+        
+        for(Session local_session:session_peers)
+        {
+            if(local_session==session)
+                continue;
+            
+            Peer peer=map_peers.get(local_session);
+            if(peer==null)
+            {
+                System.out.println("Fatal Error!");
+                continue;
+            }
+            
+            //check if the peer is online
+            if(peer.id<0)
+                continue;
+            
+            //send this peer message to client
+            String status=peer.status==Peer.Status.STATUS_IDLE?"idle":"busy";
+            
+            JsonObject obj=Json.createObjectBuilder()
+                .add("action", "online_peer")
+                .add("id", Integer.toString(peer_id))
+                .add("name",peer.name)
+                .add("platform",peer.platform)
+                .add("status", status)
+                .add("udp",Boolean.toString(peer.udp_enabled)).build();
+        }
     }
     
 }
