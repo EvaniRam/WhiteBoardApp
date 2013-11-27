@@ -35,9 +35,9 @@ import javax.websocket.server.ServerEndpoint;
 public class MyWhiteboard {
     
     private static Set<Session> session_peers=Collections.synchronizedSet(new HashSet<Session>());
-    private HashMap<Session,Peer> map_peers=new HashMap<Session,Peer>();
+    private static HashMap<Session,Peer> map_peers=new HashMap<>();
     private static int peer_id=0;
-    private PriorityQueue<Integer> reclaimed_peer_id_queue=new PriorityQueue<Integer>();
+    private static PriorityQueue<Integer> reclaimed_peer_id_queue=new PriorityQueue<>();
 
     @OnMessage
     public String onMessage(Session session,String message) {
@@ -68,22 +68,31 @@ public class MyWhiteboard {
         //first see if this peer has logged out out before
         if(map_peers.containsKey(session))
         {
-            System.out.println("The peer has not logged out, log out first!");
+            
+           
             Peer peer=map_peers.get(session);
             
-            //send the broadcast message to other peers
-           JsonObject oobj=Json.createObjectBuilder()
+            if(peer.id>0)
+            {
+                System.out.println("The peer has not logged out, log out first!");
+                
+                //send the broadcast message to other peers
+                JsonObject oobj=Json.createObjectBuilder()
                 .add("action", "peer_logout")
                 .add("id", peer.id)
                 .add("name",peer.name).build();
         
-            BroadcastMessage(oobj.toString(),session);
-        
-            peer.id=-1;
-            peer.name=null;
-            peer.status=Peer.Status.STATUS_IDLE;
-        
-            map_peers.remove(session);
+                BroadcastMessage(oobj.toString(),session);
+                
+                 //put the id into the reclaimed peer id queue
+                this.reclaimed_peer_id_queue.add(peer.id);
+                
+                peer.id=-1;
+                peer.name=null;
+                peer.status=Peer.Status.STATUS_IDLE;
+            }
+            
+            
         }
         
         
@@ -95,6 +104,7 @@ public class MyWhiteboard {
             e.printStackTrace();
         }
         session_peers.remove(session);
+        map_peers.remove(session);
         
     }
 
@@ -328,7 +338,7 @@ public class MyWhiteboard {
             Peer peer=map_peers.get(local_session);
             if(peer==null)
             {
-                System.out.println("Fatal Error!");
+                System.out.println("Fatal Error! Peer does not exist!");
                 continue;
             }
             
@@ -340,12 +350,14 @@ public class MyWhiteboard {
             String status=peer.status==Peer.Status.STATUS_IDLE?"idle":"busy";
             
             JsonObject obj=Json.createObjectBuilder()
-                .add("action", "online_peer")
+                .add("action", "peer_online")
                 .add("id", Integer.toString(peer_id))
                 .add("name",peer.name)
                 .add("platform",peer.platform)
                 .add("status", status)
                 .add("udp",Boolean.toString(peer.udp_enabled)).build();
+            
+           SendMessage(obj.toString(),session); 
         }
     }
     
