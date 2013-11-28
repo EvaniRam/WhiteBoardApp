@@ -10,7 +10,9 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Set;
 import javax.json.Json;
@@ -47,6 +49,8 @@ public class MyWhiteboard {
        
         Peer peer=map_peers.get(session);
         
+      
+        
         if(peer==null)
         {
             System.out.println("cannot find peer in the session list, message ignored!");
@@ -74,12 +78,12 @@ public class MyWhiteboard {
             
             if(peer.id>0)
             {
-                System.out.println("The peer has not logged out, log out first!");
+                System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
                 
                 //send the broadcast message to other peers
                 JsonObject oobj=Json.createObjectBuilder()
                 .add("action", "peer_logout")
-                .add("id", peer.id)
+                .add("id", Integer.toString(peer.id))
                 .add("name",peer.name).build();
         
                 BroadcastMessage(oobj.toString(),session);
@@ -138,7 +142,41 @@ public class MyWhiteboard {
         {
            PeerUpdateStatus(session,peer,jsonst);         
         }
+        else if(action.equals("peer_msg"))
+        {
+           PeerRelayMessage(session,peer,jsonst);
+        }
         
+    }
+    
+    public void PeerRelayMessage(Session session,Peer peer,JsonObject json)
+    {
+        int destPeerID=Integer.parseInt(json.getString("to"));
+        
+        Session destSession=FindSessionbyID(destPeerID);
+        
+        if(destSession==null)
+        {
+            System.out.println("cannot find peer with id "+destPeerID);
+            return;
+        }
+        
+        
+        SendMessage(json.toString(),destSession);
+        
+    }
+    
+    public Session FindSessionbyID(int destPeerID)
+    {
+        for (Entry thisEntry : map_peers.entrySet()) 
+        {
+            Peer peer=(Peer)thisEntry.getValue();
+            Session session=(Session)thisEntry.getKey();
+            if(peer.id==destPeerID)
+                return session;   
+        }
+        
+        return null;
     }
     
     public void BroadcastMessage(String msg) 
@@ -195,9 +233,9 @@ public class MyWhiteboard {
         
         
         int candiate_id;
-        if(!this.reclaimed_peer_id_queue.isEmpty())
+        if(!reclaimed_peer_id_queue.isEmpty())
         {
-            candiate_id=this.reclaimed_peer_id_queue.poll();
+            candiate_id=reclaimed_peer_id_queue.poll();
         }
         else
         {
@@ -238,7 +276,7 @@ public class MyWhiteboard {
         
         JsonObject oobj=Json.createObjectBuilder()
                 .add("action", "peer_login")
-                .add("id", Integer.toString(peer_id))
+                .add("id", Integer.toString(peer.id))
                 .add("name",peer.name)
                 .add("platform",peer.platform)
                 .add("status", status)
@@ -267,14 +305,14 @@ public class MyWhiteboard {
         //send the broadcast message to other peers
         JsonObject oobj=Json.createObjectBuilder()
                 .add("action", "peer_logout")
-                .add("id", peer.id)
+                .add("id", Integer.toString(peer.id))
                 .add("name",peer.name).build();
         
         BroadcastMessage(oobj.toString(),session);
         
         
         //put the id into the reclaimed peer id queue
-        this.reclaimed_peer_id_queue.add(peer.id);
+        reclaimed_peer_id_queue.add(peer.id);
         
         peer.id=-1;
         peer.name=null;
@@ -306,11 +344,12 @@ public class MyWhiteboard {
             
         
          //send a response message to client
-        JsonObject obj=Json.createObjectBuilder()
+       /*   JsonObject obj=Json.createObjectBuilder()
                 .add("action", "update_status").build();
         
         
         SendMessage(obj.toString(),session);
+        */
         
         if(!status_changed)
             return;
@@ -321,7 +360,7 @@ public class MyWhiteboard {
         //send the broadcast message to other peers
         JsonObject oobj=Json.createObjectBuilder()
                 .add("action", "peer_status_update")
-                .add("id", peer.id)
+                .add("id", Integer.toString(peer.id))
                 .add("status",json.getString("status")).build();
         
         BroadcastMessage(oobj.toString(),session);
@@ -351,7 +390,7 @@ public class MyWhiteboard {
             
             JsonObject obj=Json.createObjectBuilder()
                 .add("action", "peer_online")
-                .add("id", Integer.toString(peer_id))
+                .add("id", Integer.toString(peer.id))
                 .add("name",peer.name)
                 .add("platform",peer.platform)
                 .add("status", status)
