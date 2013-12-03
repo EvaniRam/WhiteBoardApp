@@ -15,6 +15,8 @@ import java.util.LinkedList;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
@@ -40,6 +42,11 @@ public class MyWhiteboard {
     private static HashMap<Session,Peer> map_peers=new HashMap<>();
     private static int peer_id=0;
     private static PriorityQueue<Integer> reclaimed_peer_id_queue=new PriorityQueue<>();
+    
+    private Timer heartbeatTimer;
+    private TimerTask heartbeatTask;
+    private Session session;
+    private Peer peer;
 
     @OnMessage
     public String onMessage(Session session,String message) {
@@ -116,7 +123,9 @@ public class MyWhiteboard {
     public void onOpen(Session session,EndpointConfig config) {
         
         session_peers.add(session);
-        map_peers.put(session, new Peer());
+        this.session=session;
+        this.peer=new Peer();
+        map_peers.put(session, this.peer);
     }
     
     @OnError
@@ -145,6 +154,11 @@ public class MyWhiteboard {
         else if(action.equals("peer_msg"))
         {
            PeerRelayMessage(session,peer,jsonst);
+        }
+        else if(action.equals("heartbeat"))
+        {
+            heartbeatTimer.cancel();
+            heartbeatTimer.schedule(heartbeatTask, 18000,18000);
         }
         
     }
@@ -286,6 +300,15 @@ public class MyWhiteboard {
         
         System.out.println("Login: id "+peer.id+" name: "+peer.name);
         
+        if(heartbeatTimer!=null)
+            heartbeatTimer.cancel();
+        
+        if(heartbeatTask==null)
+            heartbeatTask=new HeartBeatTask();
+        
+        heartbeatTimer=new Timer();
+        heartbeatTimer.schedule(heartbeatTask, 18000,18000);
+        
     }
     
     public void PeerLogout(Session session,Peer peer,JsonObject json)
@@ -317,6 +340,10 @@ public class MyWhiteboard {
         peer.id=-1;
         peer.name=null;
         peer.status=Peer.Status.STATUS_IDLE;
+        
+        
+         if(heartbeatTimer!=null)
+            heartbeatTimer.cancel();
         
        // map_peers.remove(session);
         
@@ -399,5 +426,60 @@ public class MyWhiteboard {
            SendMessage(obj.toString(),session); 
         }
     }
+    
+    private class HeartBeatTask extends TimerTask{
+
+        @Override
+        public void run() {
+            System.out.println("client "+peer.id +" has been out of contact for long!");
+            
+            //assume the client has died, and force its logout
+            //first see if this peer has logged out out before
+          if(map_peers.containsKey(session))
+          {
+            
+           
+            Peer peer=map_peers.get(session);
+            
+            if(peer.id>0)
+            {
+                System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
+                
+                //send the broadcast message to other peers
+                JsonObject oobj=Json.createObjectBuilder()
+                .add("action", "peer_logout")
+                .add("id", Integer.toString(peer.id))
+                .add("name",peer.name).build();
+        
+                BroadcastMessage(oobj.toString(),session);
+                
+                 //put the id into the reclaimed peer id queue
+                reclaimed_peer_id_queue.add(peer.id);
+                
+                peer.id=-1;
+                peer.name=null;
+                peer.status=Peer.Status.STATUS_IDLE;
+            }
+            
+            
+        }
+        
+        
+        
+        try{
+        session.close();
+        }catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+        session_peers.remove(session);
+        map_peers.remove(session);
+        
+    }
+            
+            
+        }
+    
+    
     
 }

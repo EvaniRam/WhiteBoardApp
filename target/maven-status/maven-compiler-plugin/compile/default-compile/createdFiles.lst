@@ -1,5 +1,9 @@
+jp/co/fujixerox/whiteboardapp/MyWhiteboard$1.class
 jp/co/fujixerox/whiteboardapp/Peer.class
-jp/co/fujixerox/whiteboardapp/Coordinates.class
-jp/co/fujixerox/whiteboardapp/Peer$Status.class
 jp/co/fujixerox/whiteboardapp/MyWhiteboard.class
+jp/co/fujixerox/whiteboardapp/MyWhiteboard$HeartBeatTask.class
+jp/co/fujixerox/whiteboardapp/FigureEncoder.class
+jp/co/fujixerox/whiteboardapp/Peer$Status.class
+jp/co/fujixerox/whiteboardapp/Coordinates.class
 jp/co/fujixerox/whiteboardapp/Figure.class
+jp/co/fujixerox/whiteboardapp/FigureDecoder.class
