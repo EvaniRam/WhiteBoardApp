@@ -17,6 +17,10 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
@@ -43,10 +47,10 @@ public class MyWhiteboard {
     private static int peer_id=0;
     private static PriorityQueue<Integer> reclaimed_peer_id_queue=new PriorityQueue<>();
     
-    private Timer heartbeatTimer;
-    private TimerTask heartbeatTask;
+    private ScheduledExecutorService heartbeatService;
+    private Future<?> heartbeatTask;
     private Session session;
-    private Peer peer;
+    private Peer self;
 
     @OnMessage
     public String onMessage(Session session,String message) {
@@ -85,22 +89,21 @@ public class MyWhiteboard {
             
             if(peer.id>0)
             {
-                System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
-                
-                //send the broadcast message to other peers
-                JsonObject oobj=Json.createObjectBuilder()
-                .add("action", "peer_logout")
-                .add("id", Integer.toString(peer.id))
-                .add("name",peer.name).build();
-        
-                BroadcastMessage(oobj.toString(),session);
+               System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
                 
                  //put the id into the reclaimed peer id queue
-                this.reclaimed_peer_id_queue.add(peer.id);
-                
-                peer.id=-1;
-                peer.name=null;
-                peer.status=Peer.Status.STATUS_IDLE;
+                 reclaimed_peer_id_queue.add(peer.id);
+        
+                 peer.id=-1;
+                 peer.name=null;
+                 peer.status=Peer.Status.STATUS_IDLE;
+        
+        
+                 if(heartbeatTask!=null)
+                 {
+                   if(!heartbeatTask.isCancelled() && !heartbeatTask.isDone())
+                   heartbeatTask.cancel(true);
+                 }
             }
             
             
@@ -112,10 +115,17 @@ public class MyWhiteboard {
         session.close();
         }catch (IOException e)
         {
+            
+            System.out.println("Error trying to close session!");
             e.printStackTrace();
         }
-        session_peers.remove(session);
-        map_peers.remove(session);
+            session_peers.remove(session);
+            map_peers.remove(session);
+        
+           
+        
+        if(heartbeatService!=null)
+            heartbeatService.shutdown();
         
     }
 
@@ -124,8 +134,10 @@ public class MyWhiteboard {
         
         session_peers.add(session);
         this.session=session;
-        this.peer=new Peer();
-        map_peers.put(session, this.peer);
+        this.self=new Peer();
+        map_peers.put(session, this.self);
+        
+        heartbeatService=Executors.newScheduledThreadPool(1);
     }
     
     @OnError
@@ -157,8 +169,15 @@ public class MyWhiteboard {
         }
         else if(action.equals("heartbeat"))
         {
-            heartbeatTimer.cancel();
-            heartbeatTimer.schedule(heartbeatTask, 18000,18000);
+            
+             if(heartbeatTask!=null)
+              {
+                if(!heartbeatTask.isCancelled() && !heartbeatTask.isDone())
+                heartbeatTask.cancel(true);
+              }
+        
+        
+             heartbeatTask=heartbeatService.schedule(new HeartBeatTask(),18000, TimeUnit.MILLISECONDS);
         }
         
     }
@@ -300,14 +319,16 @@ public class MyWhiteboard {
         
         System.out.println("Login: id "+peer.id+" name: "+peer.name);
         
-        if(heartbeatTimer!=null)
-            heartbeatTimer.cancel();
         
-        if(heartbeatTask==null)
-            heartbeatTask=new HeartBeatTask();
         
-        heartbeatTimer=new Timer();
-        heartbeatTimer.schedule(heartbeatTask, 18000,18000);
+        if(heartbeatTask!=null)
+        {
+            if(!heartbeatTask.isCancelled() && !heartbeatTask.isDone())
+                heartbeatTask.cancel(true);
+        }
+        
+        
+        heartbeatTask=heartbeatService.schedule(new HeartBeatTask(),18000, TimeUnit.MILLISECONDS);
         
     }
     
@@ -342,8 +363,11 @@ public class MyWhiteboard {
         peer.status=Peer.Status.STATUS_IDLE;
         
         
-         if(heartbeatTimer!=null)
-            heartbeatTimer.cancel();
+          if(heartbeatTask!=null)
+          {
+            if(!heartbeatTask.isCancelled() && !heartbeatTask.isDone())
+                heartbeatTask.cancel(true);
+          }
         
        // map_peers.remove(session);
         
@@ -427,11 +451,11 @@ public class MyWhiteboard {
         }
     }
     
-    private class HeartBeatTask extends TimerTask{
+    private class HeartBeatTask implements Runnable{
 
         @Override
         public void run() {
-            System.out.println("client "+peer.id +" has been out of contact for long!");
+            System.out.println("client "+self.id +" has been out of contact for long, assuming offline!");
             
             //assume the client has died, and force its logout
             //first see if this peer has logged out out before
@@ -443,7 +467,7 @@ public class MyWhiteboard {
             
             if(peer.id>0)
             {
-                System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
+                //System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
                 
                 //send the broadcast message to other peers
                 JsonObject oobj=Json.createObjectBuilder()
@@ -470,10 +494,16 @@ public class MyWhiteboard {
         session.close();
         }catch (IOException e)
         {
+            
+            System.out.println("Error trying to close the session!");
+            
             e.printStackTrace();
         }
         session_peers.remove(session);
         map_peers.remove(session);
+        
+        
+       
         
     }
             
