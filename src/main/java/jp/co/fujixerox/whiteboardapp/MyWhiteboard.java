@@ -90,6 +90,17 @@ public class MyWhiteboard {
             if(peer.id>0)
             {
                System.out.println("The peer "+ peer.id+":"+peer.name+" has not logged out, log out first!");
+               
+               
+               
+               
+                 //send the broadcast message to other peers
+                 JsonObject oobj=Json.createObjectBuilder()
+                .add("action", "peer_logout")
+                .add("id", Integer.toString(peer.id))
+                .add("name",peer.name).build();
+        
+                 BroadcastMessage(oobj.toString(),session);
                 
                  //put the id into the reclaimed peer id queue
                  reclaimed_peer_id_queue.add(peer.id);
